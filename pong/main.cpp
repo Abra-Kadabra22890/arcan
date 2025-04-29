@@ -6,13 +6,19 @@
 
 // секция данных игры  
 typedef struct {
-    float x, y, width, height, rad, dx, dy, speed;
+    float width, height, x, y, rad, dx, dy, speed;
     HBITMAP hBitmap;//хэндл к спрайту шарика 
+    bool status;
 } sprite;
 
 sprite racket;//ракетка игрока
 sprite enemy;//ракетка противника
 sprite ball;//шарик
+
+const int brickRow = 20;
+const int brickColumn = 5;
+
+sprite brickArray[brickRow][brickColumn];
 
 struct {
     int score, balls;//количество набранных очков и оставшихся "жизней"
@@ -46,14 +52,25 @@ void InitGame()
     racket.x = window.width / 2.;//ракетка посередине окна
     racket.y = window.height - racket.height;//чуть выше низа экрана - на высоту ракетки
 
-    enemy.x = racket.x;//х координату оппонета ставим в ту же точку что и игрока
-
     ball.dy = (rand() % 65 + 35) / 100.;//формируем вектор полета шарика
     ball.dx = -(1 - ball.dy);//формируем вектор полета шарика
     ball.speed = 11;
     ball.rad = 20;
     ball.x = racket.x;//x координата шарика - на середие ракетки
     ball.y = racket.y - ball.rad;//шарик лежит сверху ракетки
+
+    for (int i = 0; i < brickColumn; i++)
+    {
+        for (int j = 0; j < brickRow; j++)
+        {
+            brickArray[j][i].width = window.width / (float)brickRow;
+            brickArray[j][i].height = window.height / 3 / (float)brickColumn;
+            brickArray[j][i].x = brickArray[j][i].width * j;
+            brickArray[j][i].y = brickArray[j][i].height * i + (window.height / 3);
+            brickArray[j][i].hBitmap = enemy.hBitmap;
+            brickArray[j][i].status = true;
+        }
+    }
 
     game.score = 0;
     game.balls = 9;
@@ -93,7 +110,7 @@ void ProcessInput()
     if (!game.action && GetAsyncKeyState(VK_SPACE))
     {
         game.action = true;
-        ProcessSound("bounce.wav");
+        //ProcessSound("bounce.wav");
     }
 }
 
@@ -125,21 +142,25 @@ void ShowBitmap(HDC hDC, int x, int y, int x1, int y1, HBITMAP hBitmapBall, bool
     DeleteDC(hMemDC); // Удаляем контекст памяти
 }
 
+void ShowBricks()
+{
+    for (int i = 0; i < brickColumn; i++)
+    {
+        for (int j = 0; j < brickRow; j++)
+        {
+            if (brickArray[j][i].status)
+            {
+                ShowBitmap(window.context, brickArray[j][i].x, brickArray[j][i].y, brickArray[j][i].width, brickArray[j][i].height, brickArray[j][i].hBitmap);//ракетка оппонента
+            }
+        }
+    }
+}
+
 void ShowRacketAndBall()
 {
     ShowBitmap(window.context, 0, 0, window.width, window.height, hBack);//задний фон
-    ShowBitmap(window.context, racket.x - racket.width / 2., racket.y, racket.width, racket.height, racket.hBitmap);// ракетка игрока
-
-    if (ball.dy < 0 && (enemy.x - racket.width / 4 > ball.x || ball.x > enemy.x + racket.width / 4))
-    {
-        //имитируем разумность оппонента. на самом деле, компьютер никогда не проигрывает, и мы не считаем попадает ли его ракетка по шарику
-        //вместо этого, мы всегда делаем отскок от потолка, а раектку противника двигаем - подставляем под шарик
-        //движение будет только если шарик летит вверх, и только если шарик по оси X выходит за пределы половины длины ракетки
-        //в этом случае, мы смешиваем координаты ракетки и шарика в пропорции 9 к 1
-        enemy.x = ball.x * .1 + enemy.x * .9;
-    }
-
-    ShowBitmap(window.context, enemy.x - racket.width / 2, 0, racket.width, racket.height, enemy.hBitmap);//ракетка оппонента
+    ShowBitmap(window.context, racket.x - racket.width / 2., racket.y, racket.width, racket.height, racket.hBitmap);// ракетка игрока  
+    ShowBricks();
     ShowBitmap(window.context, ball.x - ball.rad, ball.y - ball.rad, 2 * ball.rad, 2 * ball.rad, ball.hBitmap, true);// шарик
 }
 
@@ -154,16 +175,45 @@ void CheckWalls()
     if (ball.x < ball.rad || ball.x > window.width - ball.rad)
     {
         ball.dx *= -1;
-        ProcessSound("bounce.wav");
+        //ProcessSound("bounce.wav");
     }
 }
 
 void CheckRoof()
 {
-    if (ball.y < ball.rad + racket.height)
+    if (ball.y < ball.rad)
     {
         ball.dy *= -1;
-        ProcessSound("bounce.wav");
+        //ProcessSound("bounce.wav");
+    }
+}
+
+void CheckBlock()
+{
+    for (int i = 0; i < brickColumn; i++)
+    {
+        for (int j = 0; j < brickRow; j++)
+        {
+            int borderX = brickArray[j][i].width + brickArray[j][i].x;
+            int borderY = brickArray[j][i].height + brickArray[j][i].y;
+            if (ball.x >= brickArray[j][i].x && ball.x <= borderX && ball.y >= brickArray[j][i].y && ball.y <= borderY && brickArray[j][i].status)
+            {
+                brickArray[j][i].status = false;
+                int borders[2] = { ball.y - (borderY - brickArray[j][i].y / 2), ball.x - (borderX - brickArray[j][i].x / 2) };
+
+
+                int minX = min(ball.x - brickArray[j][i].x, borderX - ball.x);
+                int minY = min(ball.y - brickArray[j][i].y, borderY - ball.y);
+
+                if (minY < minX)
+                {
+                    ball.dy *= -1;
+                }
+                else {
+                    ball.dx *= -1;
+                }
+            }
+        }
     }
 }
 
@@ -179,7 +229,7 @@ void CheckFloor()
             ball.speed += 5. / game.score;//но увеличиваем сложность - прибавляем скорости шарику
             ball.dy *= -1;//отскок
             racket.width -= 10. / game.score;//дополнительно уменьшаем ширину ракетки - для сложности
-            ProcessSound("bounce.wav");//играем звук отскока
+            //ProcessSound("bounce.wav");//играем звук отскока
         }
         else
         {//шарик не отбит
@@ -190,7 +240,7 @@ void CheckFloor()
             {
                 game.balls--;//уменьшаем количество "жизней"
 
-                ProcessSound("fail.wav");//играем звук
+                //ProcessSound("fail.wav");//играем звук
 
                 if (game.balls < 0) { //проверка условия окончания "жизней"
 
@@ -215,6 +265,8 @@ void ProcessRoom()
     CheckWalls();
     CheckRoof();
     CheckFloor();
+    CheckBlock();
+    ShowBricks();
 }
 
 void ProcessBall()
@@ -257,7 +309,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     InitWindow();//здесь инициализируем все что нужно для рисования в окне
     InitGame();//здесь инициализируем переменные игры
 
-    mciSendString(TEXT("play ..\\Debug\\music.mp3 repeat"), NULL, 0, NULL);
+    //mciSendString(TEXT("play ..\\Debug\\music.mp3 repeat"), NULL, 0, NULL);
     ShowCursor(NULL);
     
     while (!GetAsyncKeyState(VK_ESCAPE))
