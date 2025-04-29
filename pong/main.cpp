@@ -3,6 +3,7 @@
 //linker::input::additional dependensies Msimg32.lib; Winmm.lib
 
 #include "windows.h"
+#include <cmath>
 
 // секция данных игры  
 typedef struct {
@@ -156,6 +157,59 @@ void ShowBricks()
     }
 }
 
+int*** ShowTrace()
+{
+    int*** trace{ new int** [(ball.speed)] {} };
+    for (unsigned i{}; i < (ball.speed); i++)
+    {
+        trace[i] = new int*[180] {};
+    }
+    for (unsigned i{}; i < (ball.speed); i++)
+    {
+        for (unsigned j{}; j < 180; j++)
+        {
+            trace[i][j] = new int[2] {};
+        }
+    }
+
+
+    for (int i = 0; i < (ball.speed); i++)
+    {
+        for (int j = 0; j < 180; j++)
+        {
+            trace[i][j][0] = ball.x;
+            trace[i][j][1] = ball.y;
+        }
+    }
+    if (game.action)
+    {
+        for (int i = 0; i < (ball.speed); i++)
+        {
+            float x = ball.dx * (i);
+            float y = ball.dy * (i);
+            float len1 = sqrt((ball.x + 20) * (ball.x + 20) + ball.y * ball.y);
+            float len2 = sqrt(x * x + y * y);
+            float dot = (ball.x + 20) * x + ball.y * y;
+            float a = dot / (len1 * len2);
+
+            //trace[i][89][0] += ball.x + 20 * cos((acos(a) * 180 / 3.14));
+            //trace[i][89][1] += ball.y + 20 * sin((acos(a) * 180 / 3.14));
+            for (int j = 0; j < 180; j++)
+            {
+                /*if (j != 89)
+                {
+                    trace[i][j][0] += ball.x + 20 * (cos((acos(a) * 180 / 3.14)));
+                    trace[i][j][1] += ball.y + 20 * (sin((acos(a) * 180 / 3.14)));
+                }*/
+                trace[i][j][0] += x;
+                trace[i][j][1] += y;
+                SetPixel(window.context, trace[i][j][0], trace[i][j][1], RGB(0, 255, 0));
+            }            
+        }
+    }
+    return trace;
+}
+
 void ShowRacketAndBall()
 {
     ShowBitmap(window.context, 0, 0, window.width, window.height, hBack);//задний фон
@@ -188,7 +242,7 @@ void CheckRoof()
     }
 }
 
-void CheckBlock()
+void CheckBlock(int** trace)
 {
     for (int i = 0; i < brickColumn; i++)
     {
@@ -201,17 +255,21 @@ void CheckBlock()
                 brickArray[j][i].status = false;
                 int borders[2] = { ball.y - (borderY - brickArray[j][i].y / 2), ball.x - (borderX - brickArray[j][i].x / 2) };
 
-
-                int minX = min(ball.x - brickArray[j][i].x, borderX - ball.x);
-                int minY = min(ball.y - brickArray[j][i].y, borderY - ball.y);
-
-                if (minY < minX)
+                for (int i = 0; i < ball.speed; i++)
                 {
-                    ball.dy *= -1;
-                }
-                else {
-                    ball.dx *= -1;
-                }
+                    int minX = min(trace[i][0] - brickArray[j][i].x, borderX - trace[i][0]);
+                    int minY = min(trace[i][1] - brickArray[j][i].y, borderY - trace[i][1]);
+
+                    if (minY < minX)
+                    {
+                        ball.dy *= -1;
+                        return;
+                    }
+                    else {
+                        ball.dx *= -1;
+                        return;
+                    }
+                }  
             }
         }
     }
@@ -265,8 +323,9 @@ void ProcessRoom()
     CheckWalls();
     CheckRoof();
     CheckFloor();
-    CheckBlock();
+   // CheckBlock();
     ShowBricks();
+    ShowTrace();
 }
 
 void ProcessBall()
@@ -316,13 +375,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     {
         ShowRacketAndBall();//рисуем фон, ракетку и шарик
         ShowScore();//рисуем очик и жизни
-        BitBlt(window.device_context, 0, 0, window.width, window.height, window.context, 0, 0, SRCCOPY);//копируем буфер в окно
+        
         Sleep(16);//ждем 16 милисекунд (1/количество кадров в секунду)
 
         ProcessInput();//опрос клавиатуры
         LimitRacket();//проверяем, чтобы ракетка не убежала за экран
         ProcessBall();//перемещаем шарик
         ProcessRoom();//обрабатываем отскоки от стен и каретки, попадание шарика в картетку
+        BitBlt(window.device_context, 0, 0, window.width, window.height, window.context, 0, 0, SRCCOPY);//копируем буфер в окно
     }
 
 }
