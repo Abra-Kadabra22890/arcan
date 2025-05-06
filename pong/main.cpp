@@ -15,6 +15,7 @@ typedef struct {
 sprite racket;//ракетка игрока
 sprite enemy;//ракетка противника
 sprite ball;//шарик
+sprite Trace;
 
 const int brickRow = 20;
 const int brickColumn = 5;
@@ -59,6 +60,7 @@ void InitGame()
     ball.rad = 20;
     ball.x = racket.x;//x координата шарика - на середие ракетки
     ball.y = racket.y - ball.rad;//шарик лежит сверху ракетки
+    Trace = ball;
 
     for (int i = 0; i < brickColumn; i++)
     {
@@ -157,53 +159,116 @@ void ShowBricks()
     }
 }
 
+float DegToRad(float deg)
+{
+    return (deg * 3.14 / 180);
+}
+
+void CheckBlockTrace(int x, int y, float dx, float dy )
+{
+    for (int i = 0; i < brickColumn; i++)
+    {
+        for (int j = 0; j < brickRow; j++)
+        {
+            int borderX = brickArray[j][i].width + brickArray[j][i].x;
+            int borderY = brickArray[j][i].height + brickArray[j][i].y;
+            if (x >= brickArray[j][i].x && x <= borderX && y >= brickArray[j][i].y && y <= borderY && brickArray[j][i].status)
+            {
+                int minX = min(x - brickArray[j][i].x, borderX - x);
+                int minY = min(y - brickArray[j][i].y, borderY - y);
+
+                Trace.x = x;
+                Trace.y = y;
+
+                if (minY < minX)
+                {
+                    Trace.dy *= -1;
+                    return;
+                }
+                else {
+                    Trace.dx *= -1;
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void CheckWallsTrace(int x, int y, float dx, float dy)
+{
+    if (x < ball.rad || x > window.width - ball.rad)
+    {
+        Trace.dx *= -1;
+        Trace.x = x;
+        Trace.y = y;
+    }
+}
+
+void CheckRoofTrace(int x, int y, float dx, float dy)
+{
+    if (y < ball.rad)
+    {
+        Trace.dy *= -1;
+        Trace.x = x;
+        Trace.y = y;
+    }
+}
+
+void CheckFloorTrace(int x, int y, float dx, float dy)
+{
+    if (y > window.height - ball.rad - racket.height)//шарик пересек линию отскока - горизонталь ракетки
+    {
+        if (x >= x - racket.width / 2. - ball.rad && x <= racket.x + racket.width / 2. + ball.rad)//шарик отбит, и мы не в режиме обработки хвоста
+        {
+            Trace.dy *= -1;//отскок
+            Trace.x = x;
+            Trace.y = y;
+        }
+    }
+}
+
 int*** ShowTrace()
 {
-    int*** trace{ new int** [(ball.speed)] {} };
-    for (unsigned i{}; i < (ball.speed); i++)
+    int*** trace{ new int** [(ball.speed)+1] {} };
+    for (unsigned i{}; i < (ball.speed)+1; i++)
     {
-        trace[i] = new int*[180] {};
+        trace[i] = new int*[181] {};
     }
-    for (unsigned i{}; i < (ball.speed); i++)
+    for (unsigned i{}; i < (ball.speed)+1; i++)
     {
-        for (unsigned j{}; j < 180; j++)
+        for (unsigned j{}; j < 181; j++)
         {
             trace[i][j] = new int[2] {};
         }
     }
 
 
-    for (int i = 0; i < (ball.speed); i++)
+    for (int i = 1; i < (ball.speed)+1; i++)
     {
-        for (int j = 0; j < 180; j++)
+        for (int j = 0; j < 181; j++)
         {
-            trace[i][j][0] = ball.x;
-            trace[i][j][1] = ball.y;
+            trace[i][j][0] = Trace.x;
+            trace[i][j][1] = Trace.y;
         }
     }
     if (game.action)
     {
-        for (int i = 0; i < (ball.speed); i++)
+        for (int i = 1; i < (ball.speed)+1; i += 1)
         {
-            float x = ball.dx * (i);
-            float y = ball.dy * (i);
-            float len1 = sqrt((ball.x + 20) * (ball.x + 20) + ball.y * ball.y);
-            float len2 = sqrt(x * x + y * y);
-            float dot = (ball.x + 20) * x + ball.y * y;
-            float a = dot / (len1 * len2);
-
-            //trace[i][89][0] += ball.x + 20 * cos((acos(a) * 180 / 3.14));
-            //trace[i][89][1] += ball.y + 20 * sin((acos(a) * 180 / 3.14));
-            for (int j = 0; j < 180; j++)
+            float x = Trace.dx * i;
+            float y = Trace.dy * i;
+            float a = atan2(y, x);
+            float deg = DegToRad(90) + a;
+            for (int j = 0; j < 181; j++)
             {
-                /*if (j != 89)
-                {
-                    trace[i][j][0] += ball.x + 20 * (cos((acos(a) * 180 / 3.14)));
-                    trace[i][j][1] += ball.y + 20 * (sin((acos(a) * 180 / 3.14)));
-                }*/
-                trace[i][j][0] += x;
-                trace[i][j][1] += y;
+                trace[i][j][0] = Trace.x + (x + ball.rad * cos(deg - DegToRad(j)));
+                trace[i][j][1] = Trace.y + (y + ball.rad * sin(deg - DegToRad(j)));
                 SetPixel(window.context, trace[i][j][0], trace[i][j][1], RGB(0, 255, 0));
+                CheckBlockTrace(trace[i][j][0], trace[i][j][1], x, y);
+                CheckWallsTrace(trace[i][j][0], trace[i][j][1], x, y);
+                CheckRoofTrace(trace[i][j][0], trace[i][j][1], x, y);
+                CheckFloorTrace(trace[i][j][0], trace[i][j][1], x, y);
+
             }            
         }
     }
@@ -242,7 +307,7 @@ void CheckRoof()
     }
 }
 
-void CheckBlock(int** trace)
+void CheckBlock()
 {
     for (int i = 0; i < brickColumn; i++)
     {
@@ -253,23 +318,19 @@ void CheckBlock(int** trace)
             if (ball.x >= brickArray[j][i].x && ball.x <= borderX && ball.y >= brickArray[j][i].y && ball.y <= borderY && brickArray[j][i].status)
             {
                 brickArray[j][i].status = false;
-                int borders[2] = { ball.y - (borderY - brickArray[j][i].y / 2), ball.x - (borderX - brickArray[j][i].x / 2) };
+                int minX = min(ball.x - brickArray[j][i].x, borderX - ball.x);
+                int minY = min(ball.y - brickArray[j][i].y, borderY - ball.y);
 
-                for (int i = 0; i < ball.speed; i++)
+                if (minY < minX)
                 {
-                    int minX = min(trace[i][0] - brickArray[j][i].x, borderX - trace[i][0]);
-                    int minY = min(trace[i][1] - brickArray[j][i].y, borderY - trace[i][1]);
-
-                    if (minY < minX)
-                    {
-                        ball.dy *= -1;
-                        return;
-                    }
-                    else {
-                        ball.dx *= -1;
-                        return;
-                    }
-                }  
+                    ball.dy *= -1;
+                    return;
+                }
+                else {
+                    ball.dx *= -1;
+                    return;
+                }
+            
             }
         }
     }
@@ -323,9 +384,9 @@ void ProcessRoom()
     CheckWalls();
     CheckRoof();
     CheckFloor();
-   // CheckBlock();
+    CheckBlock();
     ShowBricks();
-    ShowTrace();
+   
 }
 
 void ProcessBall()
@@ -335,11 +396,14 @@ void ProcessBall()
         //если игра в активном режиме - перемещаем шарик
         ball.x += ball.dx * ball.speed;
         ball.y += ball.dy * ball.speed;
+        Trace.x = ball.x;
+        Trace.y = ball.y;
     }
     else
     {
         //иначе - шарик "приклеен" к ракетке
         ball.x = racket.x;
+        Trace.x = ball.x;
     }
 }
 
@@ -380,7 +444,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
         ProcessInput();//опрос клавиатуры
         LimitRacket();//проверяем, чтобы ракетка не убежала за экран
-        ProcessBall();//перемещаем шарик
+        ShowTrace();
+        ProcessBall();//перемещаем шарик        
         ProcessRoom();//обрабатываем отскоки от стен и каретки, попадание шарика в картетку
         BitBlt(window.device_context, 0, 0, window.width, window.height, window.context, 0, 0, SRCCOPY);//копируем буфер в окно
     }
