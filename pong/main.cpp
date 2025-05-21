@@ -4,6 +4,7 @@
 
 #include "windows.h"
 #include <cmath>
+#include <list>
 
 // секция данных игры  
 typedef struct {
@@ -32,11 +33,6 @@ struct {
 	HDC device_context, context;// два контекста устройства (для буферизации)
 	int width, height;//сюда сохраним размеры окна которое создаст программа
 } window;
-
-struct {
-	int x;
-	int y;
-} coordinate;
 
 HBITMAP hBack;// хэндл для фонового изображения
 
@@ -169,7 +165,7 @@ float DegToRad(float deg)
 	return (deg * 3.14 / 180);
 }
 
-void CheckBlockTrace(int x, int y, float dx, float dy)
+bool CheckBlockTrace(int x, int y, float dx, float dy)
 {
 	for (int i = 0; i < brickColumn; i++)
 	{
@@ -188,38 +184,40 @@ void CheckBlockTrace(int x, int y, float dx, float dy)
 				if (minY < minX)
 				{
 					Trace.dy *= -1;
-					return;
+					return true;
 				}
 				else {
 					Trace.dx *= -1;
-					return;
+					return true;
 				}
 			}
 		}
 	}
 }
 
-void CheckWallsTrace(int x, int y, float dx, float dy)
+bool CheckWallsTrace(int x, int y, float dx, float dy)
 {
 	if (x < ball.rad || x > window.width - ball.rad)
 	{
 		Trace.dx *= -1;
 		Trace.x = x;
 		Trace.y = y;
+		return true;
 	}
 }
 
-void CheckRoofTrace(int x, int y, float dx, float dy)
+bool CheckRoofTrace(int x, int y, float dx, float dy)
 {
 	if (y < ball.rad)
 	{
 		Trace.dy *= -1;
 		Trace.x = x;
 		Trace.y = y;
+		return true;
 	}
 }
 
-void CheckFloorTrace(int x, int y, float dx, float dy)
+bool CheckFloorTrace(int x, int y, float dx, float dy)
 {
 	if (y > window.height - ball.rad - racket.height)//шарик пересек линию отскока - горизонталь ракетки
 	{
@@ -228,17 +226,18 @@ void CheckFloorTrace(int x, int y, float dx, float dy)
 			Trace.dy *= -1;//отскок
 			Trace.x = x;
 			Trace.y = y;
+			return true;
 		}
 	}
 }
 
-int** ShowTrace()
+void ShowTrace(int arraySize = ball.speed + 100)
 {
-	int** trace{ new int* [(ball.speed) + 1000] {} };
-	for (unsigned i{}; i < (ball.speed) + 1000; i++)
+	/*int** trace{ new int* [arrSize] {} };
+	for (unsigned i{}; i < arrSize; i++)
 	{
-		trace[i] = new int[181] {};
-	}
+		trace[i] = new int[2] {};
+	}*/
 	/*for (unsigned i{}; i < (ball.speed) + 1; i++)
 	{
 		for (unsigned j{}; j < 181; j++)
@@ -248,35 +247,48 @@ int** ShowTrace()
 	}*/
 
 
-	for (int i = 1; i < (ball.speed) + 1000; i++)
-	{
-		trace[i][0] = Trace.x;
-		trace[i][1] = Trace.y;
-	}
+	//for (int i = 1; i < trace.size(); i++)
+	//{
+	//	coord startCoord{ Trace.x, Trace.y };
+	//	trace.assign(i, startCoord);
+	//	/*trace[i] = Trace.x;
+	//	trace[i] = Trace.y;*/
+	//}
 	if (game.action)
-	{
-		for (int i = 1; i < (ball.speed) + 1000; i += 1)
+	{		
+		int itter = 0;
+		for (int i = 1; i < arraySize; i += 1)
 		{
-			float x = Trace.dx * i;
-			float y = Trace.dy * i;
+			float x = Trace.dx;
+			float y = Trace.dy;
 			float a = atan2(y, x);
 			float deg = DegToRad(90) + a;
+			
+			bool contact = false;
 			//for (int j = 0; j < 181; j++)
 			//{
 				//trace[i][j][0] = Trace.x + (x + ball.rad * cos(deg - DegToRad(j)));
 				//trace[i][j][1] = Trace.y + (y + ball.rad * sin(deg - DegToRad(j)));
-			trace[i][0] = Trace.x + x;
-			trace[i][1] = Trace.y + y;
-			SetPixel(window.context, trace[i][0], trace[i][1], RGB(0, 255, 0));
-			CheckBlockTrace(trace[i][0], trace[i][1], x, y);
-			CheckWallsTrace(trace[i][0], trace[i][1], x, y);
-			CheckRoofTrace(trace[i][0], trace[i][1], x, y);
-			CheckFloorTrace(trace[i][0], trace[i][1], x, y);
-
+			int xCoord = Trace.x + x * (i - itter);
+			int yCoord = Trace.y + y * (i - itter);
+			/*coord startCoord{ xCoord, yCoord };
+			trace.assign(i, startCoord);*/
+			/*trace[i][0] = Trace.x + x * (i);
+			trace[i][1] = Trace.y + y * (i);*/
+			SetPixel(window.context, xCoord, yCoord, RGB(0, 255, 0));
+			contact = CheckBlockTrace(xCoord, yCoord, x, y);
+			contact = CheckWallsTrace(xCoord, yCoord, x, y);
+			contact = CheckRoofTrace(xCoord, yCoord, x, y);
+			contact = CheckFloorTrace(xCoord, yCoord, x, y);
+			if (contact) {
+				itter = i;
+				//arraySize = arraySize - i;
+				//ShowTrace(arraySize - i);
+			}
 			//}            
 		}
 	}
-	return trace;
+	return;
 }
 
 void ShowRacketAndBall()
